@@ -1,16 +1,29 @@
 const express = require('express')
 const cors = require('cors')
+const jwt=require('jsonwebtoken')
+
+const cookieParser = require('cookie-parser')
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const app = express()
+
+app.options('*', cors({
+  origin: 'http://localhost:5173',
+  credentials: true
+}));
 
 
 require('dotenv').config()
 
 
-const app = express()
+
 const port = process.env.PORT || 5000
 
 // middleware
-app.use(cors())
+app.use(cookieParser());
+app.use(cors({
+  origin:['http://localhost:5173'],
+  credentials:true
+}));
 app.use(express.json())
 
 app.get('/', (req, res) => {
@@ -38,7 +51,76 @@ async function run() {
      const serviceCollection=client.db("carDoctor").collection("services")
      const checkoutCollection=client.db("carDoctor").collection("booking")
 
-     app.get("/service",async(req,res)=>{
+
+// authentication jwt
+
+
+// Set the JWT as an HTTP-only cookie
+
+
+// app.post('/jwt',async(req,res)=>{
+//     const user=req.body
+
+//     console.log(user)
+    
+//     const token=  jwt.sign(user, process.env.ACCESS_TOKEN_SECRET,{ expiresIn: '1h' })
+//     res.cookie('token',token,{
+//       secure: false,
+//      httpOnly: true,
+//      sameSite:'lax'
+//     }).send({success:true})
+// })
+
+// ({
+//   origin: 'http://localhost:5173',  // Allow requests from your React app
+//   credentials: true  // Allow cookies to be sent with requests
+// })
+
+
+
+app.post('/jwt',(req,res)=>{
+  const user=req.body
+  console.log(user)
+  const token=jwt.sign(user,process.env.ACCESS_TOKEN_SECRET,{expiresIn: '1h'})
+  res.cookie('token',token,{
+    secure:false,
+    httpOnly:true,
+    sameSite:'lax'
+  }).send({success:true})
+})
+
+
+  // middleware create 
+  
+  const verifyToken= async(req,res,next)=>{
+     const token=req.cookies?.token;
+    //  console.log('verify middleware',token)
+     if(!token){
+      return res.status(401).send({message:'Unauthorized'})
+     }
+
+     jwt.verify(token,process.env.ACCESS_TOKEN_SECRET,(err,decoded)=>{
+        // error 
+        if(err){
+          console.log(err)
+          return res.status(401).send({message:'Unauthorized you have not any access'})
+        }
+        // decoded
+        console.log('verify token jwt',decoded)
+        req.user=decoded;
+        next()
+     })
+    
+    
+  }
+
+  const logger= async(req,res,next)=>{
+        // console.log('my middleware',req.host, req.originalUrl)
+    next()
+
+  }
+ 
+     app.get("/service",logger, async(req,res)=>{
         const cursor = serviceCollection.find();
         const result=await cursor.toArray()
         res.send(result)
@@ -48,7 +130,7 @@ async function run() {
 
     
 
-     app.get("/service/:id",async(req,res)=>{
+     app.get("/service/:id",logger, async(req,res)=>{
         const id=req.params.id
         const query = { _id: new ObjectId(id)}
         const options = {
@@ -64,7 +146,14 @@ async function run() {
 
     //   filter email user
     // http://localhost:5000/booking?email=sirajulll1213@gmail.com&sort=1  (finding formula) 
-     app.get('/booking',async(req,res)=>{
+     app.get('/booking',logger, verifyToken, async(req,res)=>{
+      // console.log("cookie token ",req.cookies.token)
+      
+      // jwt verify access token and user 
+      console.log('form valid token user',req.user)
+      if(req.query.email !==req.user.email){
+        return res.status(403).send({message:"permission not alow "})
+      }
         let query={}
         if(  req.query?.email){
             query={email: req.query?.email}
