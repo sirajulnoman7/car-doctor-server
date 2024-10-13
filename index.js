@@ -42,6 +42,13 @@ const client = new MongoClient(uri, {
   }
 });
 
+//  cookie options 
+const cookieOptions={
+  // secure: false,
+  secure: process.env.NODE_ENV==="production"?true: false,
+  httpOnly: true,
+  sameSite: process.env.NODE_ENV==="production"?"none": "strict",
+}
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
@@ -81,17 +88,12 @@ async function run() {
       const user = req.body
       console.log(user)
       const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' })
-      res.cookie('token', token, {
-        // secure: false,
-        secure: true,
-        httpOnly: true,
-        sameSite: 'lax'
-      }).send({ success: true })
+      res.cookie('token', token, cookieOptions).send({ success: true })
     })
     app.post('/logout', async (req, res) => {
       const user = req.body
       console.log(user)
-      res.clearCookie('token',{ maxAge: 0},).send({success:true})
+      res.clearCookie('token',{ ...cookieOptions, maxAge: 0},).send({success:true})
     })
 
 
@@ -198,8 +200,8 @@ async function run() {
 
 
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    // await client.db("admin").command({ ping: 1 });
+    // console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
